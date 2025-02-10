@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LonkeroSivu</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; }
+        .container { max-width: 800px; margin: auto; }
+        video { width: 100%; }
+        .comments { margin-top: 20px; }
+        .video-container { border: 1px solid #ddd; padding: 10px; margin: 10px 0; }
+        .username { font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>LonkeroSivu</h1>
+    <div class="container">
+        <h2>Hakupalkki</h2>
+        <input type="text" id="searchBar" placeholder="Etsi videoita..." oninput="searchVideos()">
+        
+        <h2>Käyttäjätunnus</h2>
+        <p id="userDisplay"></p>
+        <input type="text" id="usernameInput" placeholder="Nimeä uudelleen">
+        <button onclick="renameUser()">Tallenna nimi</button>
+        
+        <h2>Lataa video</h2>
+        <input type="file" id="videoUpload" accept="video/*">
+        <button onclick="uploadVideo()">Julkaise</button>
+        <p id="error" style="color: red;"></p>
+        <hr>
+        <h2>Videot</h2>
+        <div id="videoList"></div>
+    </div>
+    
+    <script>
+        function generateUserId() {
+            if (!localStorage.getItem("userId")) {
+                localStorage.setItem("userId", "User-" + Math.floor(Math.random() * 1000000));
+            }
+            return localStorage.getItem("userId");
+        }
+        
+        function loadUser() {
+            let userId = generateUserId();
+            let username = localStorage.getItem("username") || "Anonyymi";
+            document.getElementById("userDisplay").textContent = username + " (" + userId + ")";
+        }
+        
+        function renameUser() {
+            let newName = document.getElementById("usernameInput").value.trim();
+            if (newName) {
+                localStorage.setItem("username", newName);
+                loadUser();
+            }
+        }
+        
+        function uploadVideo() {
+            const fileInput = document.getElementById("videoUpload");
+            const error = document.getElementById("error");
+            const videoList = document.getElementById("videoList");
+            
+            if (fileInput.files.length === 0) {
+                error.textContent = "Valitse video!";
+                return;
+            }
+            
+            const file = fileInput.files[0];
+            const url = URL.createObjectURL(file);
+            
+            const video = document.createElement("video");
+            video.src = url;
+            video.controls = true;
+            
+            video.onloadedmetadata = function() {
+                if (video.duration < 30) {
+                    error.textContent = "Videon on oltava vähintään 30 sekuntia pitkä!";
+                    return;
+                }
+                
+                error.textContent = "";
+                
+                const userId = generateUserId();
+                const username = localStorage.getItem("username") || "Anonyymi";
+                
+                const commentBox = document.createElement("div");
+                commentBox.classList.add("comments");
+                commentBox.innerHTML = `
+                    <h3>Kommentit</h3>
+                    <input type="text" placeholder="Kirjoita kommentti..." id="commentInput">
+                    <button onclick="addComment(this)">Lähetä</button>
+                    <ul></ul>
+                `;
+                
+                const likeDislike = document.createElement("div");
+                likeDislike.innerHTML = `
+                    <button onclick="likeVideo(this)">👍 <span>0</span></button>
+                    <button onclick="dislikeVideo(this)">👎 <span>0</span></button>
+                `;
+                
+                const videoContainer = document.createElement("div");
+                videoContainer.classList.add("video-container");
+                videoContainer.innerHTML = `<p class="username">${username} (${userId})</p>`;
+                videoContainer.appendChild(video);
+                videoContainer.appendChild(likeDislike);
+                videoContainer.appendChild(commentBox);
+                videoList.prepend(videoContainer);
+            };
+        }
+        
+        function addComment(button) {
+            const input = button.previousElementSibling;
+            const commentText = input.value.trim();
+            if (commentText === "") return;
+            
+            const commentList = button.nextElementSibling;
+            const comment = document.createElement("li");
+            comment.textContent = commentText;
+            commentList.appendChild(comment);
+            input.value = "";
+        }
+        
+        function likeVideo(button) {
+            let countSpan = button.querySelector("span");
+            countSpan.textContent = parseInt(countSpan.textContent) + 1;
+        }
+        
+        function dislikeVideo(button) {
+            let countSpan = button.querySelector("span");
+            countSpan.textContent = parseInt(countSpan.textContent) + 1;
+        }
+        
+        function searchVideos() {
+            let searchValue = document.getElementById("searchBar").value.toLowerCase();
+            let videos = document.querySelectorAll(".video-container");
+            videos.forEach(video => {
+                let userText = video.querySelector(".username").textContent.toLowerCase();
+                video.style.display = userText.includes(searchValue) ? "block" : "none";
+            });
+        }
+        
+        window.onload = loadUser;
+    </script>
+</body>
+</html>
