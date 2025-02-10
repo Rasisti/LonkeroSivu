@@ -34,6 +34,8 @@
     </div>
     
     <script>
+        const serverUrl = "http://localhost:3000";
+        
         function generateUserId() {
             if (!localStorage.getItem("userId")) {
                 localStorage.setItem("userId", "User-" + Math.floor(Math.random() * 1000000));
@@ -55,79 +57,88 @@
             }
         }
         
-        function uploadVideo() {
+        async function uploadVideo() {
             const fileInput = document.getElementById("videoUpload");
             const error = document.getElementById("error");
-            const videoList = document.getElementById("videoList");
-            
             if (fileInput.files.length === 0) {
                 error.textContent = "Valitse video!";
                 return;
             }
-            
             const file = fileInput.files[0];
-            const url = URL.createObjectURL(file);
             
-            const video = document.createElement("video");
-            video.src = url;
-            video.controls = true;
+            const formData = new FormData();
+            formData.append("video", file);
+            formData.append("userId", generateUserId());
+            formData.append("username", localStorage.getItem("username") || "Anonyymi");
             
-            video.onloadedmetadata = function() {
-                if (video.duration < 30) {
-                    error.textContent = "Videon on oltava vähintään 30 sekuntia pitkä!";
-                    return;
-                }
-                
-                error.textContent = "";
-                
-                const userId = generateUserId();
-                const username = localStorage.getItem("username") || "Anonyymi";
-                
-                const commentBox = document.createElement("div");
-                commentBox.classList.add("comments");
-                commentBox.innerHTML = `
-                    <h3>Kommentit</h3>
-                    <input type="text" placeholder="Kirjoita kommentti..." id="commentInput">
-                    <button onclick="addComment(this)">Lähetä</button>
-                    <ul></ul>
-                `;
-                
-                const likeDislike = document.createElement("div");
-                likeDislike.innerHTML = `
-                    <button onclick="likeVideo(this)">👍 <span>0</span></button>
-                    <button onclick="dislikeVideo(this)">👎 <span>0</span></button>
-                `;
-                
-                const videoContainer = document.createElement("div");
-                videoContainer.classList.add("video-container");
-                videoContainer.innerHTML = `<p class="username">${username} (${userId})</p>`;
-                videoContainer.appendChild(video);
-                videoContainer.appendChild(likeDislike);
-                videoContainer.appendChild(commentBox);
-                videoList.prepend(videoContainer);
-            };
+            const response = await fetch(`${serverUrl}/upload`, {
+                method: "POST",
+                body: formData,
+            });
+            if (response.ok) {
+                loadVideos();
+            } else {
+                error.textContent = "Videon lataus epäonnistui!";
+            }
         }
         
-        function addComment(button) {
-            const input = button.previousElementSibling;
+        async function loadVideos() {
+            const response = await fetch(`${serverUrl}/videos`);
+            const videos = await response.json();
+            const videoList = document.getElementById("videoList");
+            videoList.innerHTML = "";
+            
+            videos.forEach(video => {
+                const videoContainer = document.createElement("div");
+                videoContainer.classList.add("video-container");
+                videoContainer.innerHTML = `
+                    <p class="username">${video.username} (${video.userId})</p>
+                    <video src="${serverUrl}/uploads/${video.filename}" controls></video>
+                    <button onclick="likeVideo('${video._id}', this)">👍 <span>${video.likes}</span></button>
+                    <button onclick="dislikeVideo('${video._id}', this)">👎 <span>${video.dislikes}</span></button>
+                    <div class="comments">
+                        <h3>Kommentit</h3>
+                        <input type="text" placeholder="Kirjoita kommentti..." id="commentInput-${video._id}">
+                        <button onclick="addComment('${video._id}')">Lähetä</button>
+                        <ul id="commentList-${video._id}"></ul>
+                    </div>
+                `;
+                videoList.appendChild(videoContainer);
+            });
+        }
+        
+        async function likeVideo(videoId, button) {
+            await fetch(`${serverUrl}/like`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ videoId }),
+            });
+            let countSpan = button.querySelector("span");
+            countSpan.textContent = parseInt(countSpan.textContent) + 1;
+        }
+        
+        async function dislikeVideo(videoId, button) {
+            await fetch(`${serverUrl}/dislike`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ videoId }),
+            });
+            let countSpan = button.querySelector("span");
+            countSpan.textContent = parseInt(countSpan.textContent) + 1;
+        }
+        
+        async function addComment(videoId) {
+            const input = document.getElementById(`commentInput-${videoId}`);
             const commentText = input.value.trim();
             if (commentText === "") return;
             
-            const commentList = button.nextElementSibling;
-            const comment = document.createElement("li");
-            comment.textContent = commentText;
-            commentList.appendChild(comment);
-            input.value = "";
-        }
-        
-        function likeVideo(button) {
-            let countSpan = button.querySelector("span");
-            countSpan.textContent = parseInt(countSpan.textContent) + 1;
-        }
-        
-        function dislikeVideo(button) {
-            let countSpan = button.querySelector("span");
-            countSpan.textContent = parseInt(countSpan.textContent) + 1;
+            await fetch(`${serverUrl}/comment`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ videoId, username: localStorage.getItem("username") || "Anonyymi", comment: commentText }),
+            });
+            
+            loadVideos();
         }
         
         function searchVideos() {
@@ -139,7 +150,10 @@
             });
         }
         
-        window.onload = loadUser;
+        window.onload = () => {
+            loadUser();
+            loadVideos();
+        };
     </script>
 </body>
 </html>
